@@ -92,12 +92,14 @@ class PlatesController {
   };
 
   async index(request, response) {
-    const { title, ingredients } = request.query;
+    const { title } = request.query;
   
     let plates;
-    if (ingredients) {
-      const filteringredients = ingredients.split(',').map(ingredient => ingredient.trim());
-  
+    if (title) {
+      const platesWithIngredients = await knex('ingredients')
+        .whereLike('name', `%${title}%`)
+        .select('plates_id');
+
       plates = await knex('plates')
         .innerJoin('ingredients', 'plates.id', 'ingredients.plates_id')
         .select([
@@ -109,29 +111,8 @@ class PlatesController {
           'plates.img',
           knex.raw('GROUP_CONCAT(DISTINCT ingredients.name) as ingredients')
         ])
-        .where('plates.id', 'IN', function() {
-          this.select('plates_id')
-            .from('ingredients')
-            .whereIn('name', filteringredients)
-            .groupBy('plates_id')
-            .havingRaw(`COUNT(DISTINCT name) = ${filteringredients.length}`)
-        })
-        .groupBy('plates.id')
-        .orderBy('plates.title');
-  
-    } else if (title) {
-      plates = await knex('plates')
-        .leftJoin('ingredients', 'plates.id', 'ingredients.plates_id')
-        .select([
-          'plates.id',
-          'plates.title',
-          'plates.price',
-          'plates.description',
-          'plates.type',
-          'plates.img',
-          knex.raw('GROUP_CONCAT(DISTINCT ingredients.name) as ingredients')
-        ])
-        .where('plates.title', 'like', `%${title}%`)
+        .whereIn('plates.id', platesWithIngredients.map(plate => plate.plates_id))
+        .orWhereLike('plates.title', `%${title}%`)
         .groupBy('plates.id')
         .orderBy('plates.title');
     } else {
